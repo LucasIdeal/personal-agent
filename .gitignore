@@ -1,0 +1,29 @@
+# Local runtime data and secrets — never commit
+.dsh/
+.credentials.yaml
+.env
+.env.*
+
+# Bundled toolchain (this machine only)
+.node/
+.bin/
+.corepack/
+.pnpm-store/
+
+# Dependencies and build output
+**/node_modules/
+**/*.tsbuildinfo
+app/apps/web/dist/
+app/website/.dist/
+app/website/.cache/
+app/website/.generated/
+coverage/
+.cache/
+tmp/
+.DS_Store
+
+# Upstream CI / org automation (not used by this project)
+app/.github/
+
+# Upstream community QR codes
+app/assets/community-*.png

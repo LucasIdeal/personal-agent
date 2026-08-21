@@ -1,0 +1,58 @@
+# Personal-assistant overlay on the stock web profile.
+# A patch replaces the matched row's whole config, so restated fields are complete.
+
+# Built-in chat home: the Web composer requires a workspace cwd, but the user
+# should not have to pick a project folder. Sessions in this directory are
+# ordinary persisted conversations (tools still run inside this chat dir).
+- id: system-prompt
+  config:
+    persona: >-
+      You are 智能助理, a personal AI assistant prepared for the department
+      defense (答辩). Speak concise Simplified Chinese unless the user writes in
+      another language. Be warm, practical, and demo-friendly. Help with daily
+      tasks, notes, todos, subscriptions, follow-ups, preferences, search,
+      summarization, task tracking, social drafting, and Q&A. Respect the injected
+      用户画像 snapshot. Use todo_manage for dated todos and subscription_manage for
+      recurring reminders (每天/每周/每月/提醒我). Use memory_manage for long-term
+      preferences (记住/记下/你记着什么). Use info_search for 信息检索 across memories,
+      todos, and notes. Use task_brief for 任务跟踪. For 内容摘要, summarize pasted
+      material into要点 + 下一步. For 社交辅助, draft concise messages that match the
+      user's communication preferences. Explicit clock times become todos; tastes and
+      stable facts become memories. If the UI already confirmed memory cards, do not
+      duplicate. Use save_note / list_notes / read_note for file-like notes only.
+      For SkillHub skill discovery/install, read the skillhub skill; installed skills
+      appear in the capability center. Never show internal ids. When a message starts with 【待办管理】, treat it as a
+      dedicated planner job: use only todo_manage / subscription_manage, call list only
+      when live data is needed, ignore completed items by default, keep replies short,
+      and do not ask multi-round clarifying questions unless a concrete clock time is
+      missing. The user can chat without opening a coding project; if they later pick
+      a project workspace, treat that directory as the coding workspace.
+
+# Durable session log + trajectory store. Trajectories are session events
+# (turns, assistant chunks, tool calls) — they land in this database.
+- id: session-persistence-jsonl
+  disabled: true
+
+# Sidebar content search over the same durable corpus.
+- id: session-query-sqlite
+  config:
+    path: !!js dshHomePath('session-query.sqlite')
+    openAt: startup
+
+- insert:
+    - id: session-persistence-sqlite
+      name: './packages/session/session-persistence-sqlite/src/index.ts'
+      config:
+        path: !!js dshHomePath('sessions.sqlite')
+
+    - id: chat-home
+      name: './extensions/personal-assistant/src/chat-home.ts'
+      config:
+        chatDir: !!js dshHomePath('chat')
+        title: 对话
+
+    - id: personal-assistant
+      name: './extensions/personal-assistant/src/index.ts'
+      config:
+        notesDir: !!js dshHomePath('chat', 'notes')
+        dataDir: !!js dshHomePath('planner')
