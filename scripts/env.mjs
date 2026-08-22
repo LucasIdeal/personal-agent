@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
+import { dirname, delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const WIN = process.platform === 'win32'
@@ -16,6 +16,7 @@ export function nodeMeetsEngines() {
 }
 
 export function assertNode() {
+  preferLocalNode()
   const [major] = process.versions.node.split('.').map(Number)
   if (major < 22) {
     console.error(`需要 Node.js 22.19+ 或 24+，当前是 ${process.version}。`)
@@ -23,8 +24,57 @@ export function assertNode() {
     process.exit(1)
   }
   if (!nodeMeetsEngines()) {
-    console.warn(`建议 Node.js 22.19+ 或 24+（当前 ${process.version}），将继续尝试安装。`)
+    console.warn(`当前是 ${process.version}。完整功能建议 Node.js 22.19+ 或 24+，将继续尝试启动。`)
   }
+}
+
+export function localNodeBins() {
+  const root = join(ROOT, '.node')
+  if (!existsSync(root)) return []
+  const bins = []
+  for (const name of readdirSync(root)) {
+    const unix = join(root, name, 'bin', 'node')
+    const win = join(root, name, 'node.exe')
+    if (existsSync(unix)) bins.push(unix)
+    if (existsSync(win)) bins.push(win)
+  }
+  return bins
+}
+
+export function nodeHasFts5() {
+  try {
+    const sqlite = process.getBuiltinModule?.('node:sqlite')
+    if (!sqlite?.DatabaseSync) return false
+    const db = new sqlite.DatabaseSync(':memory:')
+    try {
+      db.exec('CREATE VIRTUAL TABLE t USING fts5(x)')
+      return true
+    } finally {
+      db.close()
+    }
+  } catch {
+    return false
+  }
+}
+
+/** If this Node is too old, re-run the same script with a bundled copy under `.node/`. */
+export function preferLocalNode() {
+  if (process.env.PERSONAL_AGENT_NODE_LOCKED) return
+  if (nodeMeetsEngines() && nodeHasFts5()) return
+  const current = process.execPath
+  const next = localNodeBins().find(bin => bin !== current)
+  if (!next) return
+  const binDir = dirname(next)
+  console.log(`改用本地 Node：${next}`)
+  const result = spawnSync(next, process.argv.slice(1), {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      PERSONAL_AGENT_NODE_LOCKED: '1',
+      PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+    },
+  })
+  process.exit(result.status ?? 1)
 }
 
 function npxCommand() {

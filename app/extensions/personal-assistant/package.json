@@ -1,0 +1,11 @@
+{
+  "name": "personal-assistant",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./chat-home": "./src/chat-home.ts",
+    "./package.json": "./package.json"
+  }
+}

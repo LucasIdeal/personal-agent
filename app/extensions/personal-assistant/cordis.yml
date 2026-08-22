@@ -37,22 +37,23 @@
 - id: session-query-sqlite
   config:
     path: !!js dshHomePath('session-query.sqlite')
-    openAt: startup
+    # Node 22.19+ has FTS5. Older 22.x still boots; sidebar full-text search stays off.
+    openAt: !!js (function () { try { const db = new (process.getBuiltinModule('node:sqlite').DatabaseSync)(':memory:'); db.exec('CREATE VIRTUAL TABLE t USING fts5(x)'); db.close(); return 'startup'; } catch { return 'never'; } })()
 
 - insert:
     - id: session-persistence-sqlite
-      name: './packages/session/session-persistence-sqlite/src/index.ts'
+      name: '@deepseek-ai/dsh-session-persistence-sqlite'
       config:
         path: !!js dshHomePath('sessions.sqlite')
 
     - id: chat-home
-      name: './extensions/personal-assistant/src/chat-home.ts'
+      name: 'personal-assistant/chat-home'
       config:
         chatDir: !!js dshHomePath('chat')
         title: 对话
 
     - id: personal-assistant
-      name: './extensions/personal-assistant/src/index.ts'
+      name: 'personal-assistant'
       config:
         notesDir: !!js dshHomePath('chat', 'notes')
         dataDir: !!js dshHomePath('planner')
