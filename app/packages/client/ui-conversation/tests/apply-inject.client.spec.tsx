@@ -304,14 +304,14 @@ describe('conversation slot inject API', () => {
   it('startChat opens the built-in chat-home workspace', async () => {
     const b = await bench()
     await b.runtime.workspaces.update((draft) => {
-      draft.items.push({
+      draft.items = [{
         workspaceId: 'chat-home' as never,
         path: '/tmp/.dsh/chat',
         title: '对话',
         sessionIds: [],
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      })
+      }] as never
     })
     const resident = b.residentApi(undefined)
     b.runtime.workspaces.stub('connectWorkspace', () => Promise.resolve(ROOT))

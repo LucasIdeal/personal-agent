@@ -150,11 +150,12 @@ export function HeroHints({ t }: { t: HeroTranslate }) {
 
 async function fetchHints(force: boolean): Promise<HeroHintItem[]> {
   try {
-    const res = await fetch(force ? '/planner-api/hints/refresh' : '/planner-api/hints', {
-      method: force ? 'POST' : 'GET',
-      headers: force ? { 'content-type': 'application/json' } : undefined,
-      body: force ? '{}' : undefined,
-    })
+    const res = await fetch(
+      force ? '/planner-api/hints/refresh' : '/planner-api/hints',
+      force
+        ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }
+        : { method: 'GET' },
+    )
     if (!res.ok) return []
     const data = await res.json() as { items?: HeroHintItem[] }
     return Array.isArray(data.items) ? data.items.filter(item => item.title && item.prompt).slice(0, 4) : []

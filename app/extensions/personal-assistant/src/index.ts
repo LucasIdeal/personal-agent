@@ -16,6 +16,7 @@ import { extractFromUserText } from './memory-llm.ts'
 import { scanYesterday } from './memory-scan.ts'
 import { refreshHints } from './hints-llm.ts'
 import { CapabilityCatalog } from './capability-catalog.ts'
+import { applyLlmSetup, readLlmSetup } from './llm-setup.ts'
 
 export const name = 'personal-assistant'
 export const inject = ['tools']
@@ -133,6 +134,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       extract: text => extractFromUserText(runtimeCtx, text),
       scan: () => scanYesterday(memory, { sessionsPath, getContext: () => runtimeCtx }, new Date(), true),
       refreshHints: (force = false) => refreshHints(memory, store, () => runtimeCtx, force),
+      readSetup: () => readLlmSetup(ctx),
+      applySetup: body => applyLlmSetup(ctx, body),
     })
     console.log('[personal-assistant] planner column mounted')
   })

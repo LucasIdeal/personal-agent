@@ -1,0 +1,13 @@
+{
+  "name": "personal-agent",
+  "private": true,
+  "description": "Personal AI assistant",
+  "scripts": {
+    "setup": "node scripts/bootstrap.mjs",
+    "start": "node start.mjs",
+    "web": "node start.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  }
+}

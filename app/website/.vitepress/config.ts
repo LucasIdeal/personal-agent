@@ -248,7 +248,7 @@ function siteTitle(previewTag: string): string {
 
 export default withMermaid({
   title: '智能助理',
-  description: '个人 AI 助理：对话、待办、记忆与能力扩展'
+  description: '个人 AI 助理：对话、待办、记忆与能力扩展',
   base,
   head: [
     // VitePress leaves head hrefs untouched, so the base belongs here explicitly.

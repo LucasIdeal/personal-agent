@@ -102,6 +102,7 @@ function mount() {
   }
   mountHints()
   mountCapabilityDock()
+  mountLlmSetup()
 }
 
 async function refresh() {
@@ -201,6 +202,7 @@ function renderRail() {
     memories > 0 ? el('span', { className: 'qq-planner-badge qq-planner-badge-mem', text: String(memories) }) : '',
     openRailButton(),
     unread > 0 ? el('span', { className: 'qq-planner-badge', text: String(unread) }) : '',
+    setupRailButton(),
   )
   return wrap
 }
@@ -237,6 +239,165 @@ function openRailButton() {
   btn.addEventListener('click', () => openPanel('planner'))
   return btn
 }
+
+function setupRailButton() {
+  const btn = el('button', {
+    className: 'qq-planner-icon qq-planner-open qq-planner-open-setup',
+    type: 'button',
+    'aria-label': '配置模型',
+  })
+  btn.innerHTML = `${gearSvg()}<span class="qq-planner-open-label">配置模型</span>`
+  btn.addEventListener('click', () => { void openLlmSetup(true) })
+  return btn
+}
+
+const SETUP_SKIP_KEY = 'qq-setup-skip'
+/** @type {HTMLElement | null} */
+let setupDialog = null
+/** @type {any} */
+let setupState = null
+
+function mountLlmSetup() {
+  void openLlmSetup(false)
+}
+
+async function openLlmSetup(force) {
+  try {
+    const res = await fetch('/planner-api/setup')
+    if (!res.ok) return
+    setupState = await res.json()
+  } catch (error) {
+    console.warn('[setup] load failed', error)
+    if (!force) return
+    setupState = { presets: [], current: { configured: false }, keys: {} }
+  }
+  const skip = !force && localStorage.getItem(SETUP_SKIP_KEY) === '1'
+  if (skip && setupState?.current?.configured) return
+  paintLlmSetup()
+}
+
+function paintLlmSetup() {
+  document.querySelector('.qq-setup-mask')?.remove()
+  const current = setupState?.current ?? {}
+  const presets = setupState?.presets ?? []
+  const mask = el('div', { className: 'qq-setup-mask', role: 'dialog', 'aria-label': '配置模型' })
+  const box = el('div', { className: 'qq-setup-dialog' })
+  box.append(
+    el('div', { className: 'qq-setup-title', text: '配置模型接口' }),
+    el('div', { className: 'qq-setup-hint', text: '支持 DeepSeek、OpenAI、Claude，以及任意 OpenAI 兼容网关。密钥只保存在本机。' }),
+  )
+  const form = el('div', { className: 'qq-setup-form' })
+  const preset = el('select', { className: 'qq-setup-input' })
+  for (const item of presets) {
+    const option = el('option', { value: item.id, text: item.label })
+    if (item.id === current.preset) option.selected = true
+    preset.append(option)
+  }
+  const provider = el('input', { className: 'qq-setup-input', placeholder: '提供方 ID，如 openai-compat' })
+  provider.value = current.preset === 'custom' ? (current.provider || '') : ''
+  const key = el('input', { className: 'qq-setup-input', type: 'password', placeholder: current.configured ? '已配置，留空则保持原密钥' : 'API 密钥', autocomplete: 'off' })
+  const baseURL = el('input', { className: 'qq-setup-input', placeholder: 'API 地址（可选）' })
+  baseURL.value = current.baseURL || ''
+  const model = el('input', { className: 'qq-setup-input', placeholder: '模型 ID', list: 'qq-setup-models' })
+  model.value = current.model || ''
+  const models = el('datalist', { id: 'qq-setup-models' })
+  const note = el('div', { className: 'qq-setup-note' })
+  const error = el('div', { className: 'qq-setup-error' })
+
+  function selectedPreset() {
+    return presets.find(item => item.id === preset.value) ?? presets[0]
+  }
+  function syncFields() {
+    const item = selectedPreset()
+    if (!item) return
+    note.textContent = item.hint
+    baseURL.placeholder = item.baseUrlPlaceholder || 'API 地址'
+    const custom = item.id === 'custom'
+    provider.hidden = !custom
+    if (provider.parentElement) provider.parentElement.hidden = !custom
+    if (!custom) provider.value = item.provider
+    models.replaceChildren()
+    for (const id of item.models ?? []) models.append(el('option', { value: id }))
+    if (!model.value && item.defaultModel) model.value = item.defaultModel
+  }
+  preset.addEventListener('change', () => {
+    const item = selectedPreset()
+    model.value = item?.defaultModel || ''
+    if (item?.id !== 'custom') baseURL.value = ''
+    syncFields()
+  })
+
+  form.append(
+    labeled('提供方', preset),
+    labeled('提供方 ID', provider),
+    labeled('API 密钥', key),
+    labeled('API 地址', baseURL),
+    labeled('模型 ID', model),
+    models,
+    note,
+    error,
+  )
+  syncFields()
+  const skipLabel = el('label', { className: 'qq-setup-skip' })
+  const skipBox = el('input', { type: 'checkbox' })
+  skipBox.checked = localStorage.getItem(SETUP_SKIP_KEY) === '1'
+  skipLabel.append(skipBox, document.createTextNode(' 下次打开不再弹出（可随时点侧栏「配置模型」）'))
+  const actions = el('div', { className: 'qq-setup-actions' })
+  const later = el('button', { type: 'button', className: 'qq-planner-ghost', text: current.configured ? '使用当前配置' : '稍后配置' })
+  const save = el('button', { type: 'button', className: 'qq-planner-primary', text: '保存并开始' })
+  later.addEventListener('click', () => {
+    if (skipBox.checked || current.configured) {
+      try { localStorage.setItem(SETUP_SKIP_KEY, skipBox.checked ? '1' : '0') } catch { /* ignore */ }
+    }
+    mask.remove()
+    setupDialog = null
+  })
+  save.addEventListener('click', () => {
+    save.disabled = true
+    save.textContent = '保存中…'
+    error.textContent = ''
+    void fetch('/planner-api/setup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        preset: preset.value,
+        provider: provider.value,
+        apiKey: key.value,
+        baseURL: baseURL.value,
+        model: model.value,
+      }),
+    }).then(async (res) => {
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '保存失败')
+      try { localStorage.setItem(SETUP_SKIP_KEY, '1') } catch { /* ignore */ }
+      setupState = data
+      mask.remove()
+      setupDialog = null
+    }).catch((err) => {
+      error.textContent = err instanceof Error ? err.message : '保存失败'
+    }).finally(() => {
+      save.disabled = false
+      save.textContent = '保存并开始'
+    })
+  })
+  actions.append(later, save)
+  box.append(form, skipLabel, actions)
+  mask.append(box)
+  document.body.appendChild(mask)
+  setupDialog = mask
+  key.focus()
+}
+
+function labeled(label, control) {
+  const wrap = el('label', { className: 'qq-setup-field' })
+  wrap.append(el('span', { text: label }), control)
+  return wrap
+}
+
+function gearSvg() {
+  return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.4 1.8h3.2l.4 1.5a4.8 4.8 0 0 1 1.3.8l1.5-.5 1.6 2.8-1.2 1a4.8 4.8 0 0 1 0 1.6l1.2 1-1.6 2.8-1.5-.5a4.8 4.8 0 0 1-1.3.8l-.4 1.5H6.4l-.4-1.5a4.8 4.8 0 0 1-1.3-.8l-1.5.5L1.6 9.9l1.2-1a4.8 4.8 0 0 1 0-1.6l-1.2-1 1.6-2.8 1.5.5a4.8 4.8 0 0 1 1.3-.8l.4-1.5Z" stroke="currentColor"/><circle cx="8" cy="8" r="1.8" stroke="currentColor"/></svg>'
+}
+
 
 function createWide() {
   const wrap = el('div', { className: 'qq-planner-wide' })

@@ -9,6 +9,7 @@ import { listCapabilities } from './capabilities.ts'
 import type { CapabilityCatalog } from './capability-catalog.ts'
 import { installSkillHubSkill, listInstalledSkillSlugs, searchSkillHub, skillInstallTargets } from './skillhub.ts'
 import type { HintSet, MemoryExtractResult, MemoryKind, RecurrenceRule, TodoStatus } from './types.ts'
+import type { LlmSetupInput, LlmSetupState } from './llm-setup.ts'
 
 const MIME: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
@@ -19,6 +20,8 @@ export interface PlannerHttpDeps {
   extract: (text: string) => Promise<MemoryExtractResult>
   scan: () => Promise<{ day: string; proposed: number; written: number }>
   refreshHints: (force?: boolean) => Promise<HintSet>
+  readSetup: () => Promise<LlmSetupState>
+  applySetup: (body: LlmSetupInput) => Promise<LlmSetupState>
 }
 
 export function registerPlannerHttp(
@@ -42,7 +45,7 @@ export function registerPlannerHttp(
   })
   server.tapIndex(html => html.replace(
     '</head>',
-    '<link rel="stylesheet" href="/planner-ui/planner.css?v=22">\n<script type="module" src="/planner-ui/planner.js?v=22"></script>\n</head>',
+    '<link rel="stylesheet" href="/planner-ui/planner.css?v=23">\n<script type="module" src="/planner-ui/planner.js?v=23"></script>\n</head>',
   ))
 }
 
@@ -89,6 +92,10 @@ async function handleApi(
       json(res, 200, { items: listCapabilities() })
       return
     }
+    if (method === 'GET' && rest[0] === 'setup' && rest.length === 1) {
+      json(res, 200, await deps.readSetup())
+      return
+    }
     if (method === 'GET' && rest[0] === 'skills' && rest.length === 1) {
       json(res, 200, {
         installed: catalog.listSkills(),
@@ -98,6 +105,10 @@ async function handleApi(
       return
     }
     const body = method === 'GET' || method === 'HEAD' ? {} : await readJson(req)
+    if (method === 'POST' && rest[0] === 'setup' && rest.length === 1) {
+      json(res, 200, await deps.applySetup(body))
+      return
+    }
     if (method === 'POST' && rest[0] === 'skills' && rest[1] === 'search' && rest.length === 2) {
       const result = await searchSkillHub(String(body.q ?? body.query ?? ''))
       json(res, 200, result)
