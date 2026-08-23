@@ -5,6 +5,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PlannerStore } from './store.ts'
 import type { MemoryStore } from './memory-store.ts'
 import { listCapabilities } from './capabilities.ts'
+import { textMatchesQuery } from './memory-search.ts'
 
 export function registerCapabilityTools(
   ctx: Context,
@@ -14,7 +15,7 @@ export function registerCapabilityTools(
 ): void {
   ctx.tools.register(defineTool({
     name: 'info_search',
-    description: 'Search across the user\'s memories, todos, subscriptions, and personal notes. Use for 信息检索 /「帮我找」「查一下」「上次说的」. Prefer this before guessing.',
+    description: 'Search across the user\'s memories, todos, subscriptions, and personal notes. Memory hits combine keyword tokens with a local embedding, not whole-phrase substring. Use for 信息检索 /「帮我找」「查一下」「上次说的」. Prefer this before guessing.',
     parameters: {
       query: {
         type: 'string',
@@ -115,23 +116,22 @@ async function collectHits(
   query: string,
   scope: string,
 ): Promise<string[]> {
-  const tokens = tokenize(query)
   const hits: string[] = []
   if (scope === 'all' || scope === 'memory') {
-    for (const item of memory.list({ status: 'active', q: query })) {
+    for (const item of memory.search(query, { status: 'active' })) {
       hits.push(`记忆 · ${item.category || item.kind}：${item.content}`)
     }
   }
   if (scope === 'all' || scope === 'todos') {
     for (const todo of store.listTodos()) {
-      if (!matchText(`${todo.title} ${todo.notes}`, tokens)) continue
+      if (!textMatchesQuery(`${todo.title} ${todo.notes}`, query)) continue
       const when = [todo.dueDate, todo.dueTime].filter(Boolean).join(' ')
       hits.push(`待办 · 《${todo.title}》${when ? ` ${when}` : ''} · ${todo.status === 'completed' ? '已完成' : '未完成'}`)
     }
   }
   if (scope === 'all' || scope === 'subscriptions') {
     for (const item of store.listSubscriptions()) {
-      if (!matchText(`${item.title} ${item.description} ${item.prompt}`, tokens)) continue
+      if (!textMatchesQuery(`${item.title} ${item.description} ${item.prompt}`, query)) continue
       hits.push(`订阅 · 《${item.title}》 ${item.status}`)
     }
   }
@@ -140,7 +140,7 @@ async function collectHits(
       const names = (await readdir(notesDir)).filter(name => name.endsWith('.md'))
       for (const name of names) {
         const body = await readFile(join(notesDir, name), 'utf8')
-        if (!matchText(`${name} ${body}`, tokens)) continue
+        if (!textMatchesQuery(`${name} ${body}`, query)) continue
         const slug = name.slice(0, -3)
         const preview = body.trim().split(/\n+/).find(Boolean)?.slice(0, 80) ?? ''
         hits.push(`笔记 · ${slug}${preview ? `：${preview}` : ''}`)
@@ -150,20 +150,6 @@ async function collectHits(
     }
   }
   return hits
-}
-
-function tokenize(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/[\s，。！？、,./\\|;:：；]+/)
-    .map(part => part.trim())
-    .filter(part => part.length >= 1)
-}
-
-function matchText(haystack: string, tokens: string[]): boolean {
-  const text = haystack.toLowerCase()
-  if (tokens.length === 0) return false
-  return tokens.every(token => text.includes(token))
 }
 
 function formatDate(date: Date): string {

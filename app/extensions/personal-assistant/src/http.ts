@@ -45,7 +45,7 @@ export function registerPlannerHttp(
   })
   server.tapIndex(html => html.replace(
     '</head>',
-    '<link rel="stylesheet" href="/planner-ui/planner.css?v=23">\n<script type="module" src="/planner-ui/planner.js?v=23"></script>\n</head>',
+    '<link rel="stylesheet" href="/planner-ui/planner.css?v=28">\n<script type="module" src="/planner-ui/planner.js?v=28"></script>\n</head>',
   ))
 }
 
@@ -142,8 +142,9 @@ async function handleApi(
       return
     }
     if (method === 'GET' && rest[0] === 'memories' && rest.length === 1) {
+      const q = url.searchParams.get('q') ?? undefined
       json(res, 200, {
-        items: memory.list({ q: url.searchParams.get('q') ?? undefined }),
+        items: q?.trim() ? memory.search(q) : memory.list(),
         brief: memory.formatBrief(),
       })
       return

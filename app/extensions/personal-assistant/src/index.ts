@@ -129,13 +129,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }, 800)
   })
 
-  ctx.inject(['webServer'], (webCtx) => {
-    registerPlannerHttp(webCtx.webServer, store, memory, webDir, config.notesDir, capabilityCatalog, {
+  ctx.inject(['webServer', 'settings', 'credentials', 'agentDefaultModel'], (readyCtx) => {
+    registerPlannerHttp(readyCtx.webServer, store, memory, webDir, config.notesDir, capabilityCatalog, {
       extract: text => extractFromUserText(runtimeCtx, text),
       scan: () => scanYesterday(memory, { sessionsPath, getContext: () => runtimeCtx }, new Date(), true),
       refreshHints: (force = false) => refreshHints(memory, store, () => runtimeCtx, force),
-      readSetup: () => readLlmSetup(ctx),
-      applySetup: body => applyLlmSetup(ctx, body),
+      readSetup: () => readLlmSetup(readyCtx),
+      applySetup: body => applyLlmSetup(readyCtx, body),
     })
     console.log('[personal-assistant] planner column mounted')
   })

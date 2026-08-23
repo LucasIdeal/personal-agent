@@ -25,6 +25,7 @@ metadata:
 ## 工具
 
 - `operator`: `create` / `list` / `search` / `update` / `delete`
+- `search` 同时走关键词分词与本地 n-gram embedding，任一通道命中即返回
 - `kind`: `preference`（口味/习惯/沟通） / `fact`（稳定个人信息） / `note`（其它长期备注）
 - `category` 可用 饮食、工作、沟通、生活
 - 向用户展示时只用内容，禁止内部 id

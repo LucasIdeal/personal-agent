@@ -77,6 +77,7 @@ function clauseToTodo(clause: string, now: Date): ProposedTodo | null {
 }
 
 function inferCategory(text: string): string {
+  if (/股票|基金|etf|持股|持仓|投资/i.test(text)) return '股票'
   if (/吃|喝|咖啡|茶|菜|口味|香菜|辣/.test(text)) return '饮食'
   if (/开会|工作|邮件|周报|代码|编辑器|缩进|tabs|spaces/.test(text)) return '工作'
   if (/沟通|称呼|语气|语言|中文|英文/.test(text)) return '沟通'

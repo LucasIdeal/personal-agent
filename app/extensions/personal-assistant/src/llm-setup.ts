@@ -89,7 +89,8 @@ export interface LlmSetupInput {
 }
 
 function sectionValue(ctx: Context, ns: string): Record<string, unknown> {
-  const hit = ctx.settings?.describe().find(item => String(item.ns) === ns)
+  const settings = ctx.get('settings')
+  const hit = settings?.describe().find(item => String(item.ns) === ns)
   const value = hit?.value
   return value && typeof value === 'object' ? value as Record<string, unknown> : {}
 }
@@ -106,16 +107,17 @@ function presetOf(provider: string): LlmPreset['id'] {
 }
 
 async function keyConfigured(ctx: Context, ref: string): Promise<boolean> {
-  if (!ctx.credentials || !ref) return false
+  const credentials = ctx.get('credentials')
+  if (!credentials || !ref) return false
   try {
-    return (await ctx.credentials.describe(credentialRef(ref))).configured
+    return (await credentials.describe(credentialRef(ref))).configured
   } catch {
     return false
   }
 }
 
 export async function readLlmSetup(ctx: Context): Promise<LlmSetupState> {
-  const selection = ctx.agentDefaultModel?.currentSelection()
+  const selection = ctx.get('agentDefaultModel')?.currentSelection()
   const provider = selection?.provider || 'deepseek-official'
   const model = selection?.model || 'deepseek-v4-flash'
   const preset = presetOf(provider)
@@ -145,7 +147,9 @@ export async function readLlmSetup(ctx: Context): Promise<LlmSetupState> {
 }
 
 export async function applyLlmSetup(ctx: Context, input: LlmSetupInput): Promise<LlmSetupState> {
-  if (!ctx.settings || !ctx.credentials) {
+  const settings = ctx.get('settings')
+  const credentials = ctx.get('credentials')
+  if (!settings || !credentials) {
     throw new Error('配置服务尚未就绪，请稍后重试')
   }
   const presetId = (input.preset || 'deepseek') as LlmPreset['id']
@@ -168,7 +172,7 @@ export async function applyLlmSetup(ctx: Context, input: LlmSetupInput): Promise
     keyRef = deriveKeyRef(provider)
   }
 
-  if (apiKey) await ctx.credentials.set(credentialRef(keyRef), apiKey)
+  if (apiKey) await credentials.set(credentialRef(keyRef), apiKey)
   else if (!(await keyConfigured(ctx, keyRef))) throw new Error('请填写 API 密钥')
 
   if (preset.id === 'deepseek') {
@@ -178,7 +182,7 @@ export async function applyLlmSetup(ctx: Context, input: LlmSetupInput): Promise
         ? { op: 'set' as const, path: ['baseURL'], value: baseURL }
         : { op: 'unset' as const, path: ['baseURL'] },
     ]
-    await ctx.settings.mutate(DEEPSEEK_NS, ops)
+    await settings.mutate(DEEPSEEK_NS, ops)
   } else {
     const profile: Record<string, unknown> = { apiKeyEnv: keyRef }
     if (baseURL) profile.baseURL = baseURL
@@ -187,12 +191,12 @@ export async function applyLlmSetup(ctx: Context, input: LlmSetupInput): Promise
       profile.api = 'openai-completions'
       profile.models = [{ id: model }]
     }
-    await ctx.settings.mutate(PI_AI_NS, [
+    await settings.mutate(PI_AI_NS, [
       { op: 'set', path: ['providers', provider], value: profile },
     ])
   }
 
-  await ctx.agentDefaultModel?.saveSelection({
+  await ctx.get('agentDefaultModel')?.saveSelection({
     provider,
     model,
     reasoningEffort: 'off',

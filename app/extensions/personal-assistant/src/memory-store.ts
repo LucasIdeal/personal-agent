@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
+import { rankMemories, SEARCH_LIMIT } from './memory-search.ts'
 import type { HintSet, Memory, MemoryKind, MemorySource, MemoryStatus } from './types.ts'
 
 export interface MemoryPatch {
@@ -60,6 +61,24 @@ export class MemoryStore {
   }
 
   list(filter: { status?: MemoryStatus; kind?: MemoryKind; q?: string } = {}): Memory[] {
+    if (filter.q?.trim()) {
+      return this.search(filter.q, { status: filter.status, kind: filter.kind })
+    }
+    return this.loadFiltered({ status: filter.status, kind: filter.kind })
+  }
+
+  /**
+   * Hybrid retrieval: keyword tokens and the local n-gram embedding run
+   * together; a hit from either channel is returned, fused by rank.
+   * @param query - raw search text from the tool or UI
+   * @param filter - optional status/kind restriction and hit cap
+   */
+  search(query: string, filter: { status?: MemoryStatus; kind?: MemoryKind; limit?: number } = {}): Memory[] {
+    const pool = this.loadFiltered({ status: filter.status, kind: filter.kind })
+    return rankMemories(pool, query, filter.limit ?? SEARCH_LIMIT)
+  }
+
+  private loadFiltered(filter: { status?: MemoryStatus; kind?: MemoryKind }): Memory[] {
     const clauses: string[] = []
     const params: string[] = []
     if (filter.status) {
@@ -69,11 +88,6 @@ export class MemoryStore {
     if (filter.kind) {
       clauses.push('kind = ?')
       params.push(filter.kind)
-    }
-    if (filter.q?.trim()) {
-      clauses.push('(content LIKE ? OR category LIKE ?)')
-      const like = `%${filter.q.trim()}%`
-      params.push(like, like)
     }
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
     const rows = this.db.prepare(

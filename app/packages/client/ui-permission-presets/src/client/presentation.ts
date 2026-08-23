@@ -12,11 +12,35 @@ export function displayPresetName(name: string): string {
 }
 
 /**
- * Render a permission preset under its product label.
+ * Render a permission preset under its English product label.
+ * Locale-aware surfaces call {@link localizedPresetLabel} instead.
  * @param value - preset machine value.
  * @param name - host-supplied preset name.
  * @returns the Full access product label or the conventional display name.
  */
 export function displayPermissionPreset(value: string, name: string): string {
   return value === FULL_ACCESS_PRESET ? 'Full access' : displayPresetName(name)
+}
+
+const PRESET_LABEL_KEYS = {
+  'read-only': 'preset.read-only',
+  'workspace-write': 'preset.workspace-write',
+  [FULL_ACCESS_PRESET]: 'preset.full-access',
+} as const
+
+/**
+ * Render a permission preset under the active locale's product label.
+ * Unknown host-configured names keep {@link displayPermissionPreset}.
+ * @param value - preset machine value.
+ * @param name - host-supplied preset name.
+ * @param t - translator for the surface's preset keys.
+ * @returns the localized product label.
+ */
+export function localizedPresetLabel(
+  value: string,
+  name: string,
+  t: (key: string) => string,
+): string {
+  const key = PRESET_LABEL_KEYS[value as keyof typeof PRESET_LABEL_KEYS]
+  return key === undefined ? displayPermissionPreset(value, name) : t(key)
 }

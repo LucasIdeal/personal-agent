@@ -144,7 +144,7 @@ export function registerPlannerTools(ctx: Context, store: PlannerStore, memory: 
 
   ctx.tools.register(defineTool({
     name: 'memory_manage',
-    description: 'Manage the user\'s long-term personal memories and preferences (profile). Create, list, search, update, or delete. Use this when the user asks to remember a preference, recalls "你记着什么", or when advice should respect saved tastes/habits. Hide internal ids; refer by content.',
+    description: 'Manage the user\'s long-term personal memories and preferences (profile). Create, list, search, update, or delete. Search runs keyword tokens and a local embedding together. Use this when the user asks to remember a preference, recalls "你记着什么", or when advice should respect saved tastes/habits. Hide internal ids; refer by content.',
     parameters: {
       operator: {
         type: 'string',
@@ -159,7 +159,7 @@ export function registerPlannerTools(ctx: Context, store: PlannerStore, memory: 
         description: 'preference = tastes/habits; fact = stable personal info; note = other durable remarks.',
       },
       category: { type: 'string', description: 'Optional bucket such as 饮食/工作/沟通/生活.' },
-      query: { type: 'string', description: 'Search keyword for operator=search.' },
+      query: { type: 'string', description: 'Search text for operator=search. Keyword tokens and the local embedding run together.' },
       new_content: { type: 'string', description: 'Replacement text for operator=update.' },
     },
     output: {
@@ -174,7 +174,7 @@ export function registerPlannerTools(ctx: Context, store: PlannerStore, memory: 
         case 'search': {
           const q = args.query || args.content
           if (!q) throw new Error('搜索记忆需要 query 或 content')
-          const items = memory.list({ status: 'active', q })
+          const items = memory.search(q, { status: 'active' })
           if (items.length === 0) return `没有找到与「${q}」相关的记忆。`
           return items.map(item => formatMemoryLine(item)).join('\n')
         }

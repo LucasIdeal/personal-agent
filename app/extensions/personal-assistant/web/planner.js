@@ -247,11 +247,21 @@ function setupRailButton() {
     'aria-label': '配置模型',
   })
   btn.innerHTML = `${gearSvg()}<span class="qq-planner-open-label">配置模型</span>`
-  btn.addEventListener('click', () => { void openLlmSetup(true) })
+  btn.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    void openLlmSetup(true)
+  })
   return btn
 }
 
 const SETUP_SKIP_KEY = 'qq-setup-skip'
+const SETUP_PRESETS = [
+  { id: 'deepseek', label: 'DeepSeek', hint: '官方 API，也可填兼容网关地址。', provider: 'deepseek-official', defaultModel: 'deepseek-v4-flash', models: ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'], baseUrlPlaceholder: 'https://api.deepseek.com' },
+  { id: 'openai', label: 'OpenAI', hint: '官方接口，或任何 OpenAI 格式的中转。', provider: 'openai', defaultModel: 'gpt-4o', models: ['gpt-4o', 'gpt-4.1', 'gpt-4o-mini', 'o4-mini'], baseUrlPlaceholder: 'https://api.openai.com/v1' },
+  { id: 'anthropic', label: 'Anthropic / Claude', hint: 'Claude 官方或兼容网关。', provider: 'anthropic', defaultModel: 'claude-sonnet-4-5', models: ['claude-sonnet-4-5', 'claude-opus-4-5', 'claude-haiku-4-5'], baseUrlPlaceholder: 'https://api.anthropic.com' },
+  { id: 'custom', label: '自定义（OpenAI 兼容）', hint: '通义、智谱、Moonshot、SiliconFlow、Ollama 等，填 Base URL + 模型 ID。', provider: 'openai-compat', defaultModel: '', models: [], baseUrlPlaceholder: 'https://api.example.com/v1' },
+]
 /** @type {HTMLElement | null} */
 let setupDialog = null
 /** @type {any} */
@@ -261,22 +271,41 @@ function mountLlmSetup() {
   void openLlmSetup(false)
 }
 
+function emptySetup(error) {
+  return { presets: SETUP_PRESETS, current: { configured: false }, keys: {}, error }
+}
+
 async function openLlmSetup(force) {
+  if (force) {
+    if (!setupState) setupState = emptySetup('')
+    paintLlmSetup()
+  }
+  let loadError = ''
   try {
     const res = await fetch('/planner-api/setup')
-    if (!res.ok) return
-    setupState = await res.json()
+    if (res.ok) {
+      setupState = await res.json()
+    } else {
+      const data = await res.json().catch(() => ({}))
+      loadError = data.error || `加载失败 (${res.status})`
+      if (!force) return
+      setupState = emptySetup(loadError)
+    }
   } catch (error) {
     console.warn('[setup] load failed', error)
+    loadError = error instanceof Error ? error.message : '加载失败'
     if (!force) return
-    setupState = { presets: [], current: { configured: false }, keys: {} }
+    setupState = emptySetup(loadError)
+  }
+  if (!Array.isArray(setupState?.presets) || setupState.presets.length === 0) {
+    setupState = { ...setupState, presets: SETUP_PRESETS, current: setupState?.current ?? { configured: false }, keys: setupState?.keys ?? {} }
   }
   const skip = !force && localStorage.getItem(SETUP_SKIP_KEY) === '1'
   if (skip && setupState?.current?.configured) return
-  paintLlmSetup()
+  paintLlmSetup(loadError)
 }
 
-function paintLlmSetup() {
+function paintLlmSetup(loadError = '') {
   document.querySelector('.qq-setup-mask')?.remove()
   const current = setupState?.current ?? {}
   const presets = setupState?.presets ?? []
@@ -302,7 +331,7 @@ function paintLlmSetup() {
   model.value = current.model || ''
   const models = el('datalist', { id: 'qq-setup-models' })
   const note = el('div', { className: 'qq-setup-note' })
-  const error = el('div', { className: 'qq-setup-error' })
+  const error = el('div', { className: 'qq-setup-error', text: loadError || setupState?.error || '' })
 
   function selectedPreset() {
     return presets.find(item => item.id === preset.value) ?? presets[0]
@@ -385,7 +414,7 @@ function paintLlmSetup() {
   mask.append(box)
   document.body.appendChild(mask)
   setupDialog = mask
-  key.focus()
+  try { key.focus() } catch { /* ignore */ }
 }
 
 function labeled(label, control) {
@@ -899,10 +928,7 @@ function renderMemoryToolbar() {
 function renderMemoryList() {
   const wrap = el('div')
   const q = state.memoryQuery.trim()
-  const items = (state.data.memories ?? []).filter((item) => {
-    if (!q) return true
-    return `${item.content} ${item.category} ${item.kind}`.includes(q)
-  })
+  const items = (state.data.memories ?? []).filter((item) => memoryMatchesQuery(item, q))
   if (items.length === 0) {
     wrap.append(el('div', {
       className: 'qq-planner-empty',
@@ -943,6 +969,50 @@ function kindBadge(kind) {
 
 function sourceLabel(source) {
   return { active: '主动', scan: '流水', manual: '手动' }[source] ?? source
+}
+
+function memoryMatchesQuery(item, q) {
+  const query = String(q ?? '').trim().toLowerCase()
+  if (!query) return true
+  const hay = `${item.content} ${item.category} ${item.kind}`.toLowerCase()
+  const tokens = []
+  const seen = new Set()
+  const add = (raw) => {
+    const token = String(raw ?? '').trim()
+    if (!token || seen.has(token)) return
+    seen.add(token)
+    tokens.push(token)
+  }
+  for (const part of query.split(/[^\p{L}\p{N}._-]+/u)) {
+    if (!part) continue
+    let latin = ''
+    let other = ''
+    const flush = () => {
+      if (latin) add(latin)
+      if (other) {
+        add(other)
+        if (other.length >= 2) {
+          for (let i = 0; i < other.length - 1; i++) add(other.slice(i, i + 2))
+        }
+      }
+      latin = ''
+      other = ''
+    }
+    for (const char of part) {
+      if (/[a-z0-9]/i.test(char)) {
+        if (other) flush()
+        latin += char
+      } else {
+        if (latin) {
+          add(latin)
+          latin = ''
+        }
+        other += char
+      }
+    }
+    flush()
+  }
+  return tokens.some(token => hay.includes(token))
 }
 
 function openMemory() {
@@ -1760,17 +1830,21 @@ function findHomeModeRow() {
   return null
 }
 
+function conversationPhase() {
+  return document.querySelector('[data-composer-seat]')?.closest('[data-phase]')?.getAttribute('data-phase')
+    ?? document.querySelector('[data-phase]:not(textarea)')?.getAttribute('data-phase')
+}
+
 function isHomeHero() {
   if (hintSending) return false
-  if (findHomeModeRow()) return true
-  const phase = document.querySelector('[data-composer-seat]')?.closest('[data-phase]')?.getAttribute('data-phase')
-    ?? document.querySelector('[data-phase]:not(textarea)')?.getAttribute('data-phase')
-  return phase === 'hero' || phase === 'settling'
+  return conversationPhase() === 'hero'
 }
 
 function placeHints(box) {
   box.hidden = false
   box.removeAttribute('hidden')
+  // Same gate as the capability dock: empty-home only. The workspace mode
+  // row also exists in active chat, so it must not keep this overlay visible.
   if (document.querySelector('[data-hero-hints]') || !isHomeHero()) {
     box.classList.add('qq-hints-hide')
     return
@@ -1780,15 +1854,23 @@ function placeHints(box) {
   const modes = findHomeModeRow()
   const planner = document.querySelector('aside.qq-planner')
   const plannerLeft = planner instanceof HTMLElement ? planner.getBoundingClientRect().left : window.innerWidth
+  const maxRight = Math.max(24, plannerLeft - 16)
   box.style.position = 'fixed'
   box.style.zIndex = '4000'
   box.style.right = 'auto'
   box.style.bottom = 'auto'
   if (modes instanceof HTMLElement) {
     const rect = modes.getBoundingClientRect()
-    box.style.left = `${Math.max(16, rect.left)}px`
-    box.style.width = `${Math.max(280, rect.width)}px`
-    box.style.top = `${rect.bottom + 12}px`
+    const left = Math.max(16, rect.left)
+    box.style.left = `${left}px`
+    box.style.width = `${Math.max(160, Math.min(Math.max(280, rect.width), maxRight - left))}px`
+    const top = rect.bottom + 12
+    const hintsHeight = box.offsetHeight || 240
+    if (top + hintsHeight > window.innerHeight - 8) {
+      box.classList.add('qq-hints-hide')
+      return
+    }
+    box.style.top = `${top}px`
     return
   }
   const width = Math.min(640, Math.max(320, plannerLeft - 48))
@@ -2214,7 +2296,12 @@ function placeCapabilityDock(box) {
     box.classList.add('qq-cap-dock-hide')
     return
   }
-  // Keep dock visible beside the composer in both hero and active chat.
+  // Empty-home discovery only. Active chat docks the composer as a sticky
+  // footer; there is no room below it, and lifting the strip would cover the input.
+  if (conversationPhase() !== 'hero') {
+    box.classList.add('qq-cap-dock-hide')
+    return
+  }
   box.classList.remove('qq-cap-dock-hide')
   if (box.parentElement !== document.body) document.body.appendChild(box)
   const rect = textarea.getBoundingClientRect()
@@ -2236,10 +2323,12 @@ function placeCapabilityDock(box) {
   box.style.bottom = 'auto'
   // Place the dock below the WHOLE composer (textarea + toolbar/send button),
   // otherwise it still covers the buttons that sit under the textarea.
-  let top = composerBottomEdge(textarea, rect) + 8
+  const top = composerBottomEdge(textarea, rect) + 8
   const dockHeight = box.offsetHeight || 100
-  const maxTop = window.innerHeight - dockHeight - 8
-  if (top > maxTop) top = Math.max(8, maxTop)
+  if (top + dockHeight > window.innerHeight - 8) {
+    box.classList.add('qq-cap-dock-hide')
+    return
+  }
   box.style.top = `${top}px`
 }
 
