@@ -286,13 +286,9 @@ export function HeroShell({ t, children }: HeroShellProps) {
           <span className={css.previewBadge}>{t('hero.preview')}</span>
         </div>
         <div className={css.body}>
-          {/* The resident composer (ConversationRoot's root-owned scrollport;
-              the workspace row rides the stack above the card) is CSS-centered
-              in that scroll body during hero — see
-              ConversationRoot.module.css [data-phase='hero']. */}
+          {children}
         </div>
       </div>
-      {children}
     </div>
   )
 }

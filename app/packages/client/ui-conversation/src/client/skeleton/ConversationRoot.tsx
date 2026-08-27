@@ -184,20 +184,27 @@ export function ConversationRoot({
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
       {hero && <HeroGlow className={css.heroGlow} />}
-      {hero && <HeroShell t={t} />}
-      {showChooser
-        ? (
-          <>
-            <HomeModePicker
-              onWorkspace={() => { setHomeMode('workspace') }}
-              onChat={() => { void startChat().catch(() => { setHomeMode('choose') }) }}
-              t={t}
-            />
-            <HeroHints t={t} />
-          </>
-        )
-        : hero && heroWorkspaceRow}
-      {hero && !showChooser ? <HeroHints t={t} /> : null}
+      {hero && (
+        <HeroShell t={t}>
+          {showChooser
+            ? (
+              <>
+                <HomeModePicker
+                  onWorkspace={() => { setHomeMode('workspace') }}
+                  onChat={() => { void startChat().catch(() => { setHomeMode('choose') }) }}
+                  t={t}
+                />
+                <HeroHints t={t} />
+              </>
+            )
+            : (
+              <>
+                {heroWorkspaceRow}
+                <HeroHints t={t} />
+              </>
+            )}
+        </HeroShell>
+      )}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
       {!showChooser && inputBar}
     </div>

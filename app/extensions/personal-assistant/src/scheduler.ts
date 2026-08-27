@@ -26,7 +26,7 @@ export function startPlannerScheduler(
         })
         .finally(() => { hinting = false })
     }
-    if (!shouldScan(memory) || scanning) return
+    if (!shouldScan(memory) || scanning || !canUseLlm(getContext)) return
     scanning = true
     void scanYesterday(memory, { sessionsPath, getContext })
       .catch((error: unknown) => {

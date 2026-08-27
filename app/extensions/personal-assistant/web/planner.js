@@ -1843,12 +1843,14 @@ function isHomeHero() {
 function placeHints(box) {
   box.hidden = false
   box.removeAttribute('hidden')
-  // Same gate as the capability dock: empty-home only. The workspace mode
-  // row also exists in active chat, so it must not keep this overlay visible.
-  if (document.querySelector('[data-hero-hints]') || !isHomeHero()) {
+  // React HeroHints owns the row when mounted; the legacy fixed overlay must
+  // not sit above the home mode cards and steal pointer events.
+  if (document.querySelector('[data-hero-hints]') || findHomeModeRow() || !isHomeHero()) {
     box.classList.add('qq-hints-hide')
+    box.style.pointerEvents = 'none'
     return
   }
+  box.style.pointerEvents = ''
   box.classList.remove('qq-hints-hide')
   if (box.parentElement !== document.body) document.body.appendChild(box)
   const modes = findHomeModeRow()
@@ -2291,6 +2293,10 @@ function flashCapabilityDock(id) {
 function placeCapabilityDock(box) {
   box.hidden = false
   box.removeAttribute('hidden')
+  if (findHomeModeRow()) {
+    box.classList.add('qq-cap-dock-hide')
+    return
+  }
   const textarea = document.querySelector('textarea[data-phase]')
   if (!(textarea instanceof HTMLTextAreaElement) || textarea.offsetParent === null) {
     box.classList.add('qq-cap-dock-hide')

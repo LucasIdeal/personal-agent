@@ -29,17 +29,18 @@ export async function scanYesterday(
   const ctx = deps.getContext?.()
   let extracted: MemoryExtractResult = { memories: [], todos: [] }
   try {
-    if (ctx) {
-      extracted = await Promise.race([
-        extractFromTranscript(ctx, transcript, now),
-        new Promise<MemoryExtractResult>((_, reject) => {
-          setTimeout(() => reject(new Error('memory scan timed out')), 15_000)
-        }),
-      ])
+    if (!ctx || !canUseLlm(ctx)) {
+      console.warn('[personal-assistant] memory scan skip: llm not ready')
+      return { day, proposed: 0, written: 0 }
     }
+    extracted = await Promise.race([
+      extractFromTranscript(ctx, transcript, now),
+      new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error('memory scan timed out')), 15_000)
+      }),
+    ]) ?? { memories: [], todos: [] }
   } catch (error) {
     console.warn('[personal-assistant] memory scan extract', error)
-    memory.recordScan(day, 0, 0)
     return { day, proposed: 0, written: 0 }
   }
   let written = 0
@@ -111,4 +112,12 @@ function eventText(type: string, raw: string): string {
 
 function shiftDays(date: Date, days: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+}
+
+function canUseLlm(ctx: Context): boolean {
+  try {
+    return Boolean(ctx.llm)
+  } catch {
+    return false
+  }
 }

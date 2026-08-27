@@ -45,7 +45,7 @@ export function registerPlannerHttp(
   })
   server.tapIndex(html => html.replace(
     '</head>',
-    '<link rel="stylesheet" href="/planner-ui/planner.css?v=28">\n<script type="module" src="/planner-ui/planner.js?v=28"></script>\n</head>',
+    '<link rel="stylesheet" href="/planner-ui/planner.css?v=29">\n<script type="module" src="/planner-ui/planner.js?v=29"></script>\n</head>',
   ))
 }
 

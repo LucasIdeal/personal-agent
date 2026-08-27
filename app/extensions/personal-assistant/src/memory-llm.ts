@@ -2,7 +2,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { BlockAssembler, createUserMessage, deepFreeze } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import {
-  EXTRACT_SYSTEM, SCAN_SYSTEM, extractHeuristic, parseExtractJson, stripRememberTrigger,
+  EXTRACT_SYSTEM, SCAN_SYSTEM, extractHeuristic, filterScanMemories,
+  parseExtractJson, stripRememberTrigger,
 } from './memory-extract.ts'
 import type { MemoryExtractResult } from './types.ts'
 
@@ -21,10 +22,10 @@ export async function extractFromTranscript(
   ctx: Context,
   transcript: string,
   now = new Date(),
-): Promise<MemoryExtractResult> {
-  const refined = await completeJson(ctx, SCAN_SYSTEM, scanPrompt(transcript, now))
-  if (refined) return refined
-  return extractHeuristic(transcript, now)
+): Promise<MemoryExtractResult | null> {
+  const refined = await completeJson(ctx, SCAN_SYSTEM, scanPrompt(transcript, now), { maxTokens: 1500 })
+  if (!refined) return null
+  return filterScanMemories(refined)
 }
 
 function userExtractPrompt(text: string, now: Date): string {
@@ -37,13 +38,22 @@ function userExtractPrompt(text: string, now: Date): string {
 
 function scanPrompt(transcript: string, now: Date): string {
   return [
-    `今天是 ${formatLocal(now)}。下面是昨天的对话摘录，请提取适合写入长期 profile 的条目：`,
+    `今天是 ${formatLocal(now)}。下面是昨天的对话摘录，每行以「用户：」或「助理：」开头。`,
+    '请仅从用户亲口表述（及用户明确确认的偏好）中提取长期记忆，勿摘助理草稿或示例文案。',
     transcript.slice(0, 12_000),
   ].join('\n')
 }
 
-async function completeJson(ctx: Context, system: string, prompt: string): Promise<MemoryExtractResult | null> {
-  const text = await completeText(ctx, system, prompt, { maxTokens: 600, timeoutMs: 12_000 })
+async function completeJson(
+  ctx: Context,
+  system: string,
+  prompt: string,
+  options: { maxTokens?: number } = {},
+): Promise<MemoryExtractResult | null> {
+  const text = await completeText(ctx, system, prompt, {
+    maxTokens: options.maxTokens ?? 600,
+    timeoutMs: 12_000,
+  })
   return text ? parseExtractJson(text) : null
 }
 
@@ -124,6 +134,7 @@ async function resolveRoute(ctx: Context): Promise<{ provider: string; model: st
     for (const provider of providers) {
       const models = await ctx.llm.listModels(provider.id)
       const preferred = models.find(model => /chat/i.test(model.id))
+        ?? models.find(model => !/reasoner|r1|flash|v4/i.test(model.id))
         ?? models.find(model => !/reasoner|r1/i.test(model.id))
         ?? models[0]
       if (preferred) return { provider: provider.id, model: preferred.id }

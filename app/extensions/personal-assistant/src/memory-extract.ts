@@ -206,9 +206,50 @@ export const EXTRACT_SYSTEM = [
 ].join('\n')
 
 export const SCAN_SYSTEM = [
-  '你在回顾昨天的对话流水，挑选适合写入用户长期 profile 的稳定偏好与事实。',
+  '你在回顾昨天的对话流水，提取用户亲口表达、且对今后交互仍有用的稳定偏好与事实，写入长期 profile。',
   '只输出 JSON：{"memories":[{"kind":"preference|fact|note","content":"...","category":"..."}],"todos":[]}',
-  '只保留对今后建议仍有用的条目（口味、工作习惯、沟通方式、身份信息）。',
-  '忽略待办管理会话、工具日志、一次性任务、临时代码、已经过期的日程。',
-  '每条 content 独立、短、可复用。没有合适内容就返回空数组。',
+  'kind=preference 表示口味/习惯/沟通偏好；fact 表示稳定个人信息；note 表示其它长期备注。',
+  '只提取：用户明确说出的口味、习惯、沟通方式、身份信息、长期工作偏好；或用户当场确认（如「对/就这样/记住」）后可归纳成一句的偏好。',
+  'content 写成第三人称、独立、可复用的完整短句（8–80 字），如「起草消息时偏好多个语气版本供选择」。不要包含「记住」「记下」。',
+  '绝不提取：助理生成的草稿/模板/示例文案（含「老师您好」「各位」「---」「正文直接复制版」「供你选择：」等片段）；',
+  '助理推测或建议（除非用户当场确认）；一次性任务、代码细节、工具日志、待办、已过期日程；Markdown 标题/列表/格式符号；不完整半句。',
+  '以「用户：」行为主；「助理：」行仅作理解用户意图的参考，不可直接摘句写入。没有合格条目时返回 {"memories":[],"todos":[]}。',
 ].join('\n')
+
+const SCAN_NOISE = [
+  /^-{2,}$/,
+  /^#{1,3}\s/,
+  /^[-*•]\s/,
+  /^\*\*[^*]+\*\*$/,
+  /^(各位|老师您好|感谢理解|谢谢大家|供你选择)[：:。.!]?$/,
+  /^(肚子|各位|老师\/同学们)$/,
+  /正文（直接复制版）/,
+  /更简洁口语|更正式（适合|版）/,
+  /^(马上动作|默认提供|给我几版|直接跟我说|会套用|你不用再|要不要我现在|全记得)/,
+  /^：/,
+  /关系较熟/,
+  /发导师|发群聊/,
+  /按你的方式给我几版/,
+  /格式模板/,
+  /用户画像/,
+  /围绕这条记忆/,
+  /你记得：/,
+]
+
+/** Drop scan artifacts: draft fragments, markdown debris, and assistant boilerplate. */
+export function filterScanMemories(result: MemoryExtractResult): MemoryExtractResult {
+  const memories = result.memories.filter(item => !isScanNoise(item.content))
+  return { memories, todos: result.todos }
+}
+
+function isScanNoise(content: string): boolean {
+  const text = content.replace(/\s+/g, ' ').trim()
+  if (text.length < 8) return true
+  if (/^(助理|用户)[：:]/.test(text)) return true
+  if (/^[\-*#:：|/\\]+/.test(text)) return true
+  if (/^[\d]+[.)]\s/.test(text)) return true
+  if ((text.match(/\*\*/g) ?? []).length >= 2) return true
+  if (SCAN_NOISE.some(pattern => pattern.test(text))) return true
+  if (text.length < 16 && !/[。！？]$/.test(text)) return true
+  return false
+}

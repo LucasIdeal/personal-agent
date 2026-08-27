@@ -126,6 +126,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       void refreshHints(memory, store, () => runtimeCtx, true).catch((error: unknown) => {
         console.warn('[personal-assistant] hints', error)
       })
+      void scanYesterday(memory, { sessionsPath, getContext: () => runtimeCtx }, new Date(), false).catch((error: unknown) => {
+        console.warn('[personal-assistant] memory scan', error)
+      })
     }, 800)
   })
 
