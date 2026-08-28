@@ -34,7 +34,7 @@ node start.mjs
 
 浏览器打开 http://127.0.0.1:3080
 
-首次打开会弹出模型配置窗口。也可随时点右侧栏底部的「配置模型」。
+未检测到可用模型配置时会弹出配置窗口；已有默认模型则刷新后不再弹出。也可随时点右侧栏底部的「配置模型」。
 
 支持 DeepSeek、OpenAI、Anthropic / Claude，以及任意 OpenAI 兼容网关（通义、智谱、Moonshot、SiliconFlow、Ollama 等）。密钥只保存在本机 `.dsh/`，不会进入 Git。
 

@@ -214,6 +214,17 @@ describe('WorkspacePicker', () => {
     expect(b.createWorkspace).not.toHaveBeenCalled()
   })
 
+  it('replaces a remote-access 403 with local deployment guidance', () => {
+    const b = mount([workspace('alpha', 'Alpha')])
+    chooseAdd()
+    act(() => {
+      b.probe.owner!.onError('transport failure for /api/host.pickDirectory: HTTP 403')
+    })
+    expect(screen.getByRole('alert').textContent).toBe(
+      '为了数据安全，建议将 https://github.com/LucasIdeal/personal-agent/ 部署至本地或内网环境使用。',
+    )
+  })
+
   it('closes the folder-error surface when the user cancels', () => {
     const b = mount([workspace('alpha', 'Alpha')])
     chooseAdd()

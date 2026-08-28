@@ -300,8 +300,8 @@ async function openLlmSetup(force) {
   if (!Array.isArray(setupState?.presets) || setupState.presets.length === 0) {
     setupState = { ...setupState, presets: SETUP_PRESETS, current: setupState?.current ?? { configured: false }, keys: setupState?.keys ?? {} }
   }
-  const skip = !force && localStorage.getItem(SETUP_SKIP_KEY) === '1'
-  if (skip && setupState?.current?.configured) return
+  const skip = localStorage.getItem(SETUP_SKIP_KEY) === '1'
+  if (!force && (setupState?.current?.configured || skip)) return
   paintLlmSetup(loadError)
 }
 

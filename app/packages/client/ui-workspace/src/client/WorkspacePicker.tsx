@@ -22,6 +22,7 @@ import { isChatHomePath } from './chat-home.ts'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
+const REMOTE_DIRECTORY_PICKER_DENIED = 'transport failure for /api/host.pickDirectory: HTTP 403'
 
 /** Core flow props: the owner supplies popover control and pick semantics. */
 export interface WorkspacePickFlowProps {
@@ -179,7 +180,7 @@ export function WorkspacePickFlow({
     onCancel: () => { setFlowOpen(false) },
     onError: (message) => {
       setFlowOpen(false)
-      setModalError(message)
+      setModalError(message === REMOTE_DIRECTORY_PICKER_DENIED ? t('folderError.remoteAccess') : message)
       setErrorOpen(true)
     },
   }
