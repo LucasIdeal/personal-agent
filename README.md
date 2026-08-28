@@ -40,6 +40,8 @@ node start.mjs
 
 支持 DeepSeek、OpenAI、Anthropic / Claude，以及任意 OpenAI 兼容网关（通义、智谱、Moonshot、SiliconFlow、Ollama 等）。密钥只保存在本机 `.dsh/`，不会进入 Git。
 
+设计说明见 [技术报告](docs/技术报告.md)：记忆写入与检索、多轮上下文与 Token 控制、工具注册与路由、LLM 降级、用户隔离、接口与扩展方式、测试。
+
 ## 目录
 
 ```
@@ -47,6 +49,7 @@ personal-agent/
 ├── start.mjs / start.cmd               # 跨平台启动
 ├── scripts/bootstrap.mjs / setup.cmd   # 跨平台安装
 ├── scripts/user-gateway.mjs            # 身份入口与用户进程路由
+├── docs/技术报告.md                    # 架构与实现说明
 ├── app/                                # 运行时与 Web 前端
 │   └── extensions/personal-assistant/  # 待办、记忆、能力中心
 └── .dsh/users/<英文名>/                 # 各用户独立数据（不入库）
