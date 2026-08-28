@@ -203,6 +203,7 @@ function renderRail() {
     openRailButton(),
     unread > 0 ? el('span', { className: 'qq-planner-badge', text: String(unread) }) : '',
     setupRailButton(),
+    logoutRailButton(),
   )
   return wrap
 }
@@ -253,6 +254,44 @@ function setupRailButton() {
     void openLlmSetup(true)
   })
   return btn
+}
+
+function logoutRailButton() {
+  const btn = el('button', {
+    className: 'qq-planner-icon qq-planner-open qq-planner-open-logout',
+    type: 'button',
+    'aria-label': '切换/退出用户',
+  })
+  btn.innerHTML = `${logoutSvg()}<span class="qq-planner-open-label">退出切换</span>`
+  btn.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    openLogoutConfirm()
+  })
+  return btn
+}
+
+function openLogoutConfirm() {
+  document.querySelector('.qq-setup-mask')?.remove()
+  const mask = el('div', { className: 'qq-setup-mask', role: 'dialog', 'aria-label': '退出或切换用户' })
+  const box = el('div', { className: 'qq-setup-dialog' })
+  box.append(
+    el('div', { className: 'qq-setup-title', text: '退出 / 切换当前用户？' }),
+    el('div', { className: 'qq-setup-hint', text: '退出后将清除当前浏览器会话身份，并返回身份选择页。各用户的会话、待办与记忆均安全保存在独立目录中。' }),
+  )
+  const actions = el('div', { className: 'qq-setup-actions', style: 'margin-top: 18px;' })
+  const cancelBtn = el('button', { className: 'qq-planner-ghost', type: 'button', text: '取消' })
+  cancelBtn.addEventListener('click', () => mask.remove())
+  const form = el('form', { method: 'POST', action: '/identity/clear' })
+  const confirmBtn = el('button', { className: 'qq-planner-primary', style: 'background: #dc2626; border-color: #dc2626;', type: 'submit', text: '确认退出' })
+  form.append(confirmBtn)
+  actions.append(cancelBtn, form)
+  box.append(actions)
+  mask.append(box)
+  mask.addEventListener('click', (e) => {
+    if (e.target === mask) mask.remove()
+  })
+  document.body.appendChild(mask)
 }
 
 const SETUP_SKIP_KEY = 'qq-setup-skip'
@@ -427,6 +466,10 @@ function gearSvg() {
   return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.4 1.8h3.2l.4 1.5a4.8 4.8 0 0 1 1.3.8l1.5-.5 1.6 2.8-1.2 1a4.8 4.8 0 0 1 0 1.6l1.2 1-1.6 2.8-1.5-.5a4.8 4.8 0 0 1-1.3.8l-.4 1.5H6.4l-.4-1.5a4.8 4.8 0 0 1-1.3-.8l-1.5.5L1.6 9.9l1.2-1a4.8 4.8 0 0 1 0-1.6l-1.2-1 1.6-2.8 1.5.5a4.8 4.8 0 0 1 1.3-.8l.4-1.5Z" stroke="currentColor"/><circle cx="8" cy="8" r="1.8" stroke="currentColor"/></svg>'
 }
 
+function logoutSvg() {
+  return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2.5H3.5A1.5 1.5 0 0 0 2 4v8a1.5 1.5 0 0 0 1.5 1.5H6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M10.5 11.5 14 8l-3.5-3.5M14 8H5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+}
+
 
 function createWide() {
   const wrap = el('div', { className: 'qq-planner-wide' })
@@ -477,9 +520,14 @@ function panelTitle(panel) {
 
 function renderHeader() {
   const header = el('div', { className: 'qq-planner-header' })
+  const actions = el('div', { style: 'display:flex;align-items:center;gap:4px;' })
+  actions.append(
+    iconButton('切换/退出用户', logoutSvg(), () => openLogoutConfirm()),
+    iconButton('收起', chevronSvg(), () => setOpen(false)),
+  )
   header.append(
     el('div', { className: 'qq-planner-title', text: panelTitle(state.panel) }),
-    iconButton('收起', chevronSvg(), () => setOpen(false)),
+    actions,
   )
   return header
 }

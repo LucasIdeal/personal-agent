@@ -34,6 +34,8 @@ node start.mjs
 
 浏览器打开 http://127.0.0.1:3080
 
+首次打开会进入独立身份页。输入企业微信英文名后，助理会为该名字启动独立运行实例；会话、待办、订阅、记忆和纯聊天工作区分别写入 `.dsh/users/<英文名>/`，不会与其他名字混用。英文名仅适用于可信内网中的身份区分，不等同于密码或企业微信 OAuth 认证。
+
 未检测到可用模型配置时会弹出配置窗口；已有默认模型则刷新后不再弹出。也可随时点右侧栏底部的「配置模型」。
 
 支持 DeepSeek、OpenAI、Anthropic / Claude，以及任意 OpenAI 兼容网关（通义、智谱、Moonshot、SiliconFlow、Ollama 等）。密钥只保存在本机 `.dsh/`，不会进入 Git。
@@ -44,14 +46,21 @@ node start.mjs
 personal-agent/
 ├── start.mjs / start.cmd               # 跨平台启动
 ├── scripts/bootstrap.mjs / setup.cmd   # 跨平台安装
+├── scripts/user-gateway.mjs            # 身份入口与用户进程路由
 ├── app/                                # 运行时与 Web 前端
 │   └── extensions/personal-assistant/  # 待办、记忆、能力中心
-└── .dsh/                               # 本地数据（不入库）
+└── .dsh/users/<英文名>/                 # 各用户独立数据（不入库）
 ```
 
 ## 本地数据
 
-会话、待办、记忆和密钥都写在 `.dsh/`，与源码分开，也不会被提交。
+会话、待办、记忆和密钥都写在对应用户的 `.dsh/users/<英文名>/`，与源码分开，也不会被提交。升级前已有的 `.dsh/` 数据会在首次启动时备份并迁移给 `rhyszhao`。
+
+如需绕过身份网关启动旧的单用户模式：
+
+```sh
+node start.mjs --single-user
+```
 
 ## 许可证
 

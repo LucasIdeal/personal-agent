@@ -5,7 +5,9 @@
   "scripts": {
     "setup": "node scripts/bootstrap.mjs",
     "start": "node start.mjs",
-    "web": "node start.mjs"
+    "web": "node start.mjs",
+    "start:single": "node start.mjs --single-user",
+    "test:user-isolation": "node --test scripts/user-data.test.mjs tests/user-gateway.test.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

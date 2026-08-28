@@ -35,6 +35,23 @@ export function registerPlannerHttp(
 ): void {
   server.register({
     kind: 'prefix',
+    path: '/identity',
+    handler: (req, res) => {
+      // 当在子进程端口访问 /identity 或 /identity/clear 时，将其重定向回网关主端口
+      const hostHeader = String(req.headers.host || '')
+      const isHttps = req.headers['x-forwarded-proto'] === 'https'
+      const scheme = isHttps ? 'https' : 'http'
+      const gatewayHost = hostHeader.includes(':') ? hostHeader.replace(/:\d+$/, ':3080') : hostHeader
+      const pathname = new URL(req.url ?? '/', 'http://x').pathname
+      res.writeHead(303, {
+        location: `${scheme}://${gatewayHost}${pathname}`,
+        'cache-control': 'no-store',
+      })
+      res.end()
+    },
+  })
+  server.register({
+    kind: 'prefix',
     path: '/planner-ui',
     handler: (req, res) => serveStatic(req, res, webDir),
   })
@@ -45,7 +62,7 @@ export function registerPlannerHttp(
   })
   server.tapIndex(html => html.replace(
     '</head>',
-    '<link rel="stylesheet" href="/planner-ui/planner.css?v=29">\n<script type="module" src="/planner-ui/planner.js?v=29"></script>\n</head>',
+    '<link rel="stylesheet" href="/planner-ui/planner.css?v=33">\n<script type="module" src="/planner-ui/planner.js?v=33"></script>\n</head>',
   ))
 }
 

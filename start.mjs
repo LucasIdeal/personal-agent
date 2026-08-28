@@ -2,6 +2,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { APP, DSH_HOME, assertNode, ensureHome, nodeHasFts5, pnpm, webDistReady } from './scripts/env.mjs'
+import { startUserGateway } from './scripts/user-gateway.mjs'
+import { initializeUserRoot, migrateLegacyUserData } from './scripts/user-data.mjs'
 
 assertNode()
 ensureHome()
@@ -22,6 +24,56 @@ if (!nodeHasFts5()) {
   console.warn('当前 Node 没有 SQLite FTS5，侧栏全文搜索已关闭。建议安装 Node.js 22.19+：https://nodejs.org/')
 }
 
-console.log(`DSH_HOME=${DSH_HOME}`)
-console.log('启动 Web UI → http://127.0.0.1:3080')
-pnpm(['dsh', 'web', '--patch', './extensions/personal-assistant/cordis.yml', ...process.argv.slice(2)])
+const args = process.argv.slice(2)
+const singleUser = args.indexOf('--single-user')
+if (singleUser >= 0) {
+  args.splice(singleUser, 1)
+  console.log(`DSH_HOME=${DSH_HOME}`)
+  console.log('启动单用户 Web UI → http://127.0.0.1:3080')
+  pnpm(['dsh', 'web', '--patch', './extensions/personal-assistant/cordis.yml', ...args])
+} else {
+  const options = parseGatewayArgs(args)
+  const migration = await migrateLegacyUserData(DSH_HOME)
+  if (migration.migrated) {
+    console.log(`已将现有数据迁移给 ${migration.username}，备份：${migration.backupRoot}`)
+  }
+  await startUserGateway({
+    ...options,
+    root: join(APP, '..'),
+    appRoot: APP,
+    dshHome: DSH_HOME,
+    prepareUser: username => initializeUserRoot(DSH_HOME, username),
+  })
+  console.log(`多用户入口 → http://${options.host}:${options.port}`)
+}
+
+function parseGatewayArgs(argv) {
+  const options = { host: '127.0.0.1', port: 3080, trustedHosts: [] }
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
+    if (arg === '--host') {
+      options.host = requireValue(argv, ++index, arg)
+    } else if (arg === '--port') {
+      options.port = Number(requireValue(argv, ++index, arg))
+      if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
+        throw new Error('--port 必须是 0 到 65535 之间的整数')
+      }
+    } else if (arg === '--trusted-host') {
+      let consumed = 0
+      while (argv[index + 1] !== undefined && !argv[index + 1].startsWith('--')) {
+        options.trustedHosts.push(argv[++index])
+        consumed++
+      }
+      if (consumed === 0) throw new Error('--trusted-host 缺少域名')
+    } else {
+      throw new Error(`未知启动参数：${arg}`)
+    }
+  }
+  return options
+}
+
+function requireValue(argv, index, flag) {
+  const value = argv[index]
+  if (value === undefined || value.startsWith('--')) throw new Error(`${flag} 缺少参数`)
+  return value
+}

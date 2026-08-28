@@ -1259,6 +1259,16 @@ body[data-ds-dark-theme] .qq-cap-dock {
   background: color-mix(in srgb, #64748b 20%, transparent);
 }
 
+.qq-planner-open-logout {
+  min-height: 88px;
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #dc2626;
+}
+
+.qq-planner-open-logout:hover {
+  background: color-mix(in srgb, #ef4444 20%, transparent);
+}
+
 .qq-setup-mask {
   position: fixed;
   inset: 0;
