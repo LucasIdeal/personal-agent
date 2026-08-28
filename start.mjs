@@ -5,6 +5,12 @@ import { APP, DSH_HOME, assertNode, ensureHome, nodeHasFts5, pnpm, webDistReady 
 import { startUserGateway } from './scripts/user-gateway.mjs'
 import { initializeUserRoot, migrateLegacyUserData } from './scripts/user-data.mjs'
 
+// 优化 Node.js 异步 I/O 线程池大小（默认仅 4，提升至 16 可加速并发文件读取与 SQLite 操作）
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '16'
+
+// 优化 V8 内存限制默认值
+process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS || ''} --max-old-space-size=4096`.trim()
+
 assertNode()
 ensureHome()
 

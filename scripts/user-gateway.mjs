@@ -3,6 +3,7 @@ import { createServer as createHttpServer, request as httpRequest } from 'node:h
 import { createServer as createNetServer, connect as netConnect } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createGzip, createBrotliCompress } from 'node:zlib'
 import { normalizeUsername } from './user-data.mjs'
 
 export const IDENTITY_COOKIE = 'personal_agent_identity'
@@ -266,7 +267,7 @@ export function createUserGateway(options = {}) {
   const startupTimeout = options.startupTimeout ?? 30_000
   const healthInterval = options.healthInterval ?? 100
   const healthPath = options.healthPath ?? '/planner-api'
-  const idleTimeout = options.idleTimeout ?? 15 * 60_000
+  const idleTimeout = options.idleTimeout ?? 30 * 60_000 // 保持 30 分钟空闲常驻，避免频繁冷启动导致公网访问等待
   const shutdownGrace = options.shutdownGrace ?? 5_000
   const trustedHosts = options.trustedHosts ?? []
   const isApiRequest = options.isApiRequest ?? defaultIsApiRequest
@@ -303,6 +304,8 @@ export function createUserGateway(options = {}) {
     if (trustedHosts.length) args.push('--trusted-host', ...trustedHosts)
     const env = {
       ...process.env,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --max-old-space-size=4096`.trim(),
+      UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE || '16',
       DSH_HOME: join(dshHome, 'users', name),
     }
     const spec = {
@@ -412,10 +415,37 @@ export function createUserGateway(options = {}) {
           : [responseHeaders['set-cookie']]
         responseHeaders['set-cookie'] = cookies.map(c => (c.includes('Secure') ? c : `${c}; Secure`))
       }
-      res.writeHead(upstreamResponse.statusCode, upstreamResponse.statusMessage, responseHeaders)
-      upstreamResponse.pipe(res)
-      upstreamResponse.once('end', release)
-      upstreamResponse.once('error', release)
+
+      // 对静态资源（JS/CSS/SVG/JSON等）增加优化缓存策略
+      const isStaticAsset = /\.(?:js|css|svg|png|jpg|jpeg|webp|woff2?|map)$/i.test(req.url) || req.url.includes('/plugins/')
+      if (isStaticAsset && upstreamResponse.statusCode === 200) {
+        if (!responseHeaders['cache-control'] || responseHeaders['cache-control'] === 'no-cache') {
+          // 带 hash/rev 的资源可安全短期强缓存，大幅度减少公网穿透重复请求
+          responseHeaders['cache-control'] = 'public, max-age=3600, stale-while-revalidate=86400'
+        }
+      }
+
+      // 公网大静态资源动态 Gzip 压缩支持（大幅减小 70%~80% 传输体积）
+      const acceptEncoding = req.headers['accept-encoding'] || ''
+      const contentType = responseHeaders['content-type'] || ''
+      const isCompressible = /^(?:text\/|application\/javascript|application\/json|image\/svg\+xml)/i.test(contentType)
+      const shouldCompress = isCompressible && !responseHeaders['content-encoding'] && req.method !== 'HEAD'
+
+      if (shouldCompress && acceptEncoding.includes('gzip')) {
+        delete responseHeaders['content-length']
+        responseHeaders['content-encoding'] = 'gzip'
+        responseHeaders['vary'] = 'Accept-Encoding'
+        res.writeHead(upstreamResponse.statusCode, upstreamResponse.statusMessage, responseHeaders)
+        const gzip = createGzip({ level: 6 })
+        upstreamResponse.pipe(gzip).pipe(res)
+        gzip.once('end', release)
+        gzip.once('error', release)
+      } else {
+        res.writeHead(upstreamResponse.statusCode, upstreamResponse.statusMessage, responseHeaders)
+        upstreamResponse.pipe(res)
+        upstreamResponse.once('end', release)
+        upstreamResponse.once('error', release)
+      }
     })
     upstream.once('error', error => {
       release()
